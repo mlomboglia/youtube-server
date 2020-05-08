@@ -10,9 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^1.19.0",
-    "express": "^4.17.1",
-    "node-url-shortener": "^1.0.1",
     "youtube-audio-server": "^2.4.2"
   }
 }
