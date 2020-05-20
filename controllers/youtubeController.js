@@ -2,7 +2,7 @@ const ytdl = require("ytdl-core");
 const fs = require("fs");
 const path = require("path");
 const FFmpeg = require("fluent-ffmpeg");
-const request = require('request');
+const request = require("request");
 
 const axios = require("../api/youtube-axios");
 const api = require("../api/youtube-api");
@@ -56,39 +56,20 @@ exports.cacheVideo = async (req, res) => {
   try {
     const headCode = await s3.headObject(s3params).promise();
     res.status(200).send({
-      state: "sucess",
+      state: "success",
       message: "Audio found in cache",
     });
     return;
   } catch (headErr) {
-    console.log(headErr);
     if (headErr.code === "NotFound") {
-      //if not Download from Youtube, store in S3, stream from S3
+      //if not Download from Youtube, store in S3
       try {
-        const url = YOUTUBE_URL_PREFIX + videoId;
-        const { writeStream, promise } = uploadStream(s3params);
-        const video = ytdl(url, audioOptions);
-        const ffmpeg = new FFmpeg(video);
-
-        process.nextTick(() => {
-          const output = ffmpeg.format(audioOptions.audioFormat).pipe(writeStream);
-
-          ffmpeg.on("error", (error) => console.log(error));
-          ffmpeg.on("progress", (prog) => console.log(prog));
-          ffmpeg.on("end", (end) => {
-            console.log("Transcoding succeeded !");
-            ffmpeg.kill();
-          });
-          output.on("error", (error) => {
-            video.end();
-            console.log(error);
-          });
-          res.status(200).send({
-            state: "sucess",
-            message: "Audio uploading to cache",
-          });
-          return;
+        uploadYoutubeStream(s3params, videoId);
+        res.status(200).send({
+          state: "success",
+          message: "Audio uploading to cache",
         });
+        return;
       } catch (err) {
         console.error(err);
         res.status(500).send({
@@ -99,7 +80,6 @@ exports.cacheVideo = async (req, res) => {
     }
   }
 };
-
 
 exports.playVideo = async (req, res) => {
   console.log("playVideo");
@@ -121,43 +101,95 @@ exports.playVideo = async (req, res) => {
 
   try {
     const headCode = await s3.headObject(s3params).promise();
-    console.log("Video found in S3, starting stream");
-    const s3Stream = s3.getObject(s3params).createReadStream();
-    s3Stream.pipe(res);
+    const signedUrl = s3.getSignedUrl('getObject', s3params);
+    console.log("Video found in cache");
+    res.status(200).send({
+      state: "success",
+      url: signedUrl,
+    });
   } catch (headErr) {
     if (headErr.code === "NotFound") {
-      //if not Download from Youtube, store in S3, stream from S3
-      try {
-        console.log("Video not found in S3, starting download from Youtube");
-
-        const url = YOUTUBE_URL_PREFIX + videoId;
-        const { writeStream, promise } = uploadStream(s3params);
-        console.log(url);
-        const video = ytdl(url, audioOptions);
-        const ffmpeg = new FFmpeg(video);
-
-        const output = ffmpeg.format(audioOptions.audioFormat).pipe(writeStream);
-        process.nextTick(() => {
-          ffmpeg.on("error", (error) => console.log(error));
-          ffmpeg.on("progress", (prog) => console.log(prog));
-          ffmpeg.on("end", (end) => {
-            console.log("Transcoding succeeded !");
-            ffmpeg.kill();
-          });
-          output.on("error", (error) => {
-            video.end();
-            console.log(error);
-          });
-          output.pipe(res);
+      console.log("Video not found in cache");
+      getURLAndTitle(videoId, (url, title) => {
+        res.status(200).send({
+          state: "success",
+          url: url,
         });
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({
-          state: "error",
-          message: e,
-        });
-      }
+      })
+      //getYoutubeStream(res, videoId);
     }
+  }
+  return;
+};
+
+/*
+Auxiliary functions
+*/
+
+
+const getYoutubeURL = (res, videoId) => {
+  try {
+    const url = YOUTUBE_URL_PREFIX + videoId;
+    const video = ytdl(url, audioOptions);
+    const ffmpeg = new FFmpeg(video);
+
+    process.nextTick(() => {
+      const output = ffmpeg.format(audioOptions.audioFormat).pipe(res);
+      ffmpeg.on("error", (error) => console.log(error));
+      ffmpeg.on("progress", (prog) => console.log(prog));
+      ffmpeg.on("end", (end) => {
+        console.log("Transcoding succeeded !");
+        ffmpeg.kill();
+      });
+      output.on("error", (error) => {
+        video.end();
+        console.log(error);
+      });
+      //return output;
+    });
+  } catch (err) {
+    throw err;
+  }
+};
+
+async function getURLAndTitle(videoID, callback) {
+  let info = await ytdl.getInfo(videoID, (err, info) => {
+      if (err) {
+          console.log(err)
+          return callback('https://google.com','error getting info')
+      }
+      let title = info.title
+      let format = ytdl.chooseFormat(info.formats, { quality: '140' });
+      if (format) {
+          let url = format.url;
+          callback(url, title);
+      }
+  });
+}
+
+const uploadYoutubeStream = (s3params, videoId) => {
+  try {
+    const url = YOUTUBE_URL_PREFIX + videoId;
+    const { writeStream, promise } = uploadStream(s3params);
+    const video = ytdl(url, audioOptions);
+    const ffmpeg = new FFmpeg(video);
+
+    process.nextTick(() => {
+      const output = ffmpeg.format(audioOptions.audioFormat).pipe(writeStream);
+      ffmpeg.on("error", (error) => console.log(error));
+      ffmpeg.on("progress", (prog) => console.log(prog));
+      ffmpeg.on("end", (end) => {
+        console.log("Transcoding succeeded !");
+        ffmpeg.kill();
+      });
+      output.on("error", (error) => {
+        video.end();
+        console.log(error);
+      });
+      return output;
+    });
+  } catch (err) {
+    throw err;
   }
 };
 
@@ -165,7 +197,7 @@ const uploadStream = ({ Bucket, Key }) => {
   const pass = new PassThrough();
   return {
     writeStream: pass,
-    promise: s3.upload({ Bucket, Key, Body: pass }).promise(),
+    promise: s3.upload({ Bucket, Key, Body: pass, ContentType: "audio/mp3" }).promise(),
   };
 };
 
