@@ -36,6 +36,7 @@ exports.searchVideos = async (req, res, next) => {
   res.status(200).json(metadata);
 };
 
+/*
 exports.cacheVideo = async (req, res) => {
   const videoId = req.params.videoId;
   if (videoId == null) {
@@ -80,6 +81,7 @@ exports.cacheVideo = async (req, res) => {
     }
   }
 };
+*/
 
 exports.playVideo = async (req, res) => {
   console.log("playVideo");
@@ -100,6 +102,7 @@ exports.playVideo = async (req, res) => {
   };
 
   try {
+    //Look in cache
     const headCode = await s3.headObject(s3params).promise();
     const signedUrl = s3.getSignedUrl('getObject', s3params);
     console.log("Video found in cache");
@@ -110,13 +113,14 @@ exports.playVideo = async (req, res) => {
   } catch (headErr) {
     if (headErr.code === "NotFound") {
       console.log("Video not found in cache");
+      uploadYoutubeStream(s3params, videoId);
       getURLAndTitle(videoId, (url, title) => {
         res.status(200).send({
           state: "success",
           url: url,
+          title: title
         });
       })
-      //getYoutubeStream(res, videoId);
     }
   }
   return;
@@ -126,7 +130,7 @@ exports.playVideo = async (req, res) => {
 Auxiliary functions
 */
 
-
+/*
 const getYoutubeURL = (res, videoId) => {
   try {
     const url = YOUTUBE_URL_PREFIX + videoId;
@@ -151,6 +155,7 @@ const getYoutubeURL = (res, videoId) => {
     throw err;
   }
 };
+*/
 
 async function getURLAndTitle(videoID, callback) {
   let info = await ytdl.getInfo(videoID, (err, info) => {
@@ -170,7 +175,7 @@ async function getURLAndTitle(videoID, callback) {
 const uploadYoutubeStream = (s3params, videoId) => {
   try {
     const url = YOUTUBE_URL_PREFIX + videoId;
-    const { writeStream, promise } = uploadStream(s3params);
+    const { writeStream, promise } = uploadAudioStream(s3params);
     const video = ytdl(url, audioOptions);
     const ffmpeg = new FFmpeg(video);
 
@@ -193,7 +198,7 @@ const uploadYoutubeStream = (s3params, videoId) => {
   }
 };
 
-const uploadStream = ({ Bucket, Key }) => {
+const uploadAudioStream = ({ Bucket, Key }) => {
   const pass = new PassThrough();
   return {
     writeStream: pass,

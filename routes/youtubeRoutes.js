@@ -6,6 +6,6 @@ router.get('/search/:query', youtubeController.searchVideos);
 
 router.get('/play/:videoId', youtubeController.playVideo);
 
-router.get('/cache/:videoId', youtubeController.cacheVideo);
+//router.get('/cache/:videoId', youtubeController.cacheVideo);
 
 module.exports = router;
