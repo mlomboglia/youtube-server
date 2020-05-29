@@ -190,5 +190,6 @@ exports.reduceSearchForVideos = (response, searchQuery) => {
     totalResults: response.pageInfo.totalResults,
     query: searchQuery,
     results: searchResults,
+    nextPageToken: response.nextPageToken,
   };
 };
