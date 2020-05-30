@@ -1,17 +1,9 @@
 const ytdl = require("ytdl-core");
-const fs = require("fs");
-const path = require("path");
 const FFmpeg = require("fluent-ffmpeg");
-const request = require("request");
 
 const axios = require("../api/youtube-axios");
-const api = require("../api/youtube-api");
-
-const AWS = require("aws-sdk");
-// Set the Region
-AWS.config.update({ region: "eu-west-1" });
-const s3 = new AWS.S3();
-const { PassThrough } = require("stream");
+const youtubeAPI = require("../api/youtube-api");
+const awsAPI = require("../api/aws-api");
 
 const YOUTUBE_URL_PREFIX = "https://www.youtube.com/watch?v=";
 
@@ -25,8 +17,11 @@ const audioOptions = {
 };
 
 exports.searchVideos = async (req, res, next) => {
-
-  const metadata = await searchForVideos(req.params.query, req.params.nextPageToken, 10);
+  const metadata = await searchForVideos(
+    req.params.query,
+    req.params.nextPageToken,
+    10
+  );
   if (metadata == null) {
     res.status(200).send({
       state: "error",
@@ -50,15 +45,9 @@ exports.playVideo = async (req, res) => {
   }
   console.log(videoId);
 
-  const s3params = {
-    Bucket: process.env.AWS_S3_BUCKET,
-    Key: videoId + ".mp3",
-  };
-
   try {
     //Look in cache
-    const headCode = await s3.headObject(s3params).promise();
-    const signedUrl = s3.getSignedUrl('getObject', s3params);
+    const signedUrl = await awsAPI.getAudio(videoId);
     console.log("Video found in cache");
     res.status(200).send({
       state: "success",
@@ -67,14 +56,14 @@ exports.playVideo = async (req, res) => {
   } catch (headErr) {
     if (headErr.code === "NotFound") {
       console.log("Video not found in cache");
-      uploadYoutubeStream(s3params, videoId);
+      uploadYoutubeStream(videoId);
       getURLAndTitle(videoId, (url, title) => {
         res.status(200).send({
           state: "success",
           url: url,
-          title: title
+          title: title,
         });
-      })
+      });
     }
   }
   return;
@@ -84,25 +73,25 @@ exports.playVideo = async (req, res) => {
 Auxiliary functions
 */
 
-async function getURLAndTitle(videoID, callback) {
+const getURLAndTitle = async (videoID, callback) => {
   let info = await ytdl.getInfo(videoID, (err, info) => {
-      if (err) {
-          console.log(err)
-          return callback('https://google.com','error getting info')
-      }
-      let title = info.title
-      let format = ytdl.chooseFormat(info.formats, { quality: '140' });
-      if (format) {
-          let url = format.url;
-          callback(url, title);
-      }
+    if (err) {
+      console.log(err);
+      return callback("https://google.com", "error getting info");
+    }
+    let title = info.title;
+    let format = ytdl.chooseFormat(info.formats, { quality: "140" });
+    if (format) {
+      let url = format.url;
+      callback(url, title);
+    }
   });
-}
+};
 
-const uploadYoutubeStream = (s3params, videoId) => {
+const uploadYoutubeStream = (videoId) => {
   try {
     const url = YOUTUBE_URL_PREFIX + videoId;
-    const { writeStream, promise } = uploadAudioStream(s3params);
+    const { writeStream, promise } = awsAPI.uploadAudioStream(videoId);
     const video = ytdl(url, audioOptions);
     const ffmpeg = new FFmpeg(video);
 
@@ -125,20 +114,19 @@ const uploadYoutubeStream = (s3params, videoId) => {
   }
 };
 
-const uploadAudioStream = ({ Bucket, Key }) => {
-  const pass = new PassThrough();
-  return {
-    writeStream: pass,
-    promise: s3.upload({ Bucket, Key, Body: pass, ContentType: "audio/mp3" }).promise(),
-  };
-};
-
 const searchForVideos = async (searchQuery, nextPageToken, amount) => {
-  const config = api.buildSearchRequest(searchQuery, nextPageToken, amount);
+  const config = youtubeAPI.buildSearchRequest(
+    searchQuery,
+    nextPageToken,
+    amount
+  );
   return axios
     .request(config)
     .then((response) => {
-      const results = api.reduceSearchForVideos(response.data, searchQuery);
+      const results = youtubeAPI.reduceSearchForVideos(
+        response.data,
+        searchQuery
+      );
       return results;
     })
     .catch((err) => {

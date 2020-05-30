@@ -7,7 +7,7 @@ const compression = require("compression");
 const morgan = require("morgan");
 const dotenv = require("dotenv");
 dotenv.config();
-const youtubeRoutes = require("./routes/youtubeRoutes");
+const audioRoutes = require("./routes/audioRoutes");
 
 // Create express server
 const app = express();
@@ -34,7 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use("/", youtubeRoutes);
+app.use("/", audioRoutes);
 
 // Set server port
 app.set("port", process.env.PORT || 5000);
