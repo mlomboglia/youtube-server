@@ -3,6 +3,7 @@ const AWS = require("aws-sdk");
 AWS.config.update({ region: process.env.AWS_REGION });
 const s3 = new AWS.S3();
 const { PassThrough } = require("stream");
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
 exports.uploadAudioStream = (videoId) => {
   const pass = new PassThrough();
@@ -17,6 +18,24 @@ exports.uploadAudioStream = (videoId) => {
       })
       .promise(),
   };
+};
+
+exports.uploadAudioInfo = (videoId, info) => {
+  const params = {
+    TableName: process.env.AWS_TABLENAME,
+    Item: {
+      videoId: videoId,
+      title: info.title,
+      length: info.length_seconds,
+      media: info.media
+    },
+  };
+
+  dynamoDb.put(params, function (err, data) {
+    if (err) console.log(err, err.stack);
+    // an error occurred
+    else console.log(data);
+  });
 };
 
 exports.getAudio = async (videoId) => {

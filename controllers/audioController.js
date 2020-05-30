@@ -56,13 +56,11 @@ exports.playVideo = async (req, res) => {
   } catch (headErr) {
     if (headErr.code === "NotFound") {
       console.log("Video not found in cache");
-      uploadYoutubeStream(videoId);
-      getURLAndTitle(videoId, (url, title) => {
-        res.status(200).send({
-          state: "success",
-          url: url,
-          title: title,
-        });
+      const videoInfo = await uploadAudio(videoId);
+      res.status(200).send({
+        state: "success",
+        url: videoInfo.url,
+        title: videoInfo.info.title,
       });
     }
   }
@@ -73,17 +71,28 @@ exports.playVideo = async (req, res) => {
 Auxiliary functions
 */
 
-const getURLAndTitle = async (videoID, callback) => {
-  let info = await ytdl.getInfo(videoID, (err, info) => {
+const uploadAudio = async (videoId) => {
+  uploadYoutubeStream(videoId);
+  const videoInfo = await getVideoInfo(videoId);
+  awsAPI.uploadAudioInfo(videoInfo.videoId, videoInfo.info);
+  return videoInfo;
+};
+
+const getVideoInfo = async (videoId) => {
+  return info = await ytdl.getInfo(videoId, (err, info) => {
     if (err) {
       console.log(err);
       return callback("https://google.com", "error getting info");
     }
-    let title = info.title;
+    //console.log(info);
+    //let title = info.title;
     let format = ytdl.chooseFormat(info.formats, { quality: "140" });
     if (format) {
-      let url = format.url;
-      callback(url, title);
+      return {
+        videoId: videoId,
+        url: format.url,
+        info: info,
+      };
     }
   });
 };
