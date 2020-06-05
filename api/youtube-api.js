@@ -90,7 +90,22 @@ exports.buildSearchRequest = (query, nextPageToken, amount = 12) => {
     {
       part: "id,snippet",
       q: query,
-      type: "video",
+      type: "video,playlist",
+      pageToken: nextPageToken,
+      maxResults: amount,
+      key: process.env.YOUTUBE_API_KEY,
+    },
+    null
+  );
+};
+
+exports.buildListPlaylistItemsRequest = (playlistId, nextPageToken, amount = 20) => {
+  return buildApiRequest(
+    "GET",
+    "/youtube/v3/playlistItems",
+    {
+      part: "id,snippet",
+      playlistId: playlistId,
       pageToken: nextPageToken,
       maxResults: amount,
       key: process.env.YOUTUBE_API_KEY,
@@ -185,11 +200,25 @@ exports.reduceSearchForVideos = (response, searchQuery) => {
   let searchResults = response.items.map((item) => ({
     ...item,
     videoId: item.id.videoId,
+    playlistId: item.id.playlistId
   }));
   return {
     totalResults: response.pageInfo.totalResults,
     query: searchQuery,
     results: searchResults,
+    nextPageToken: response.nextPageToken,
+  };
+};
+
+exports.reducePlaylist = (response, playlistId) => {
+  let res = response.items.map((item) => ({
+    ...item,
+    videoId: item.snippet.resourceId.videoId
+  }));
+  return {
+    totalResults: response.pageInfo.totalResults,
+    playlistId: playlistId,
+    results: res,
     nextPageToken: response.nextPageToken,
   };
 };

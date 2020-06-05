@@ -67,6 +67,24 @@ exports.playVideo = async (req, res) => {
   return;
 };
 
+exports.listPlaylistItems = async (req, res) => {
+  console.log("listPlaylistItems");
+  const playlistId = req.params.playlistId;
+  if (playlistId == null) {
+    console.log("No playlistId found");
+    res.status(200).send({
+      state: "error",
+      message: "No playlistId found",
+    });
+    return;
+  }
+  console.log(playlistId);
+
+  //List audio from playlist
+  const metadata = await getPlaylist(playlistId);
+  res.status(200).json(metadata);
+};
+
 /*
 Auxiliary functions
 */
@@ -79,7 +97,7 @@ const uploadAudio = async (videoId) => {
 };
 
 const getVideoInfo = async (videoId) => {
-  return info = await ytdl.getInfo(videoId, (err, info) => {
+  return (info = await ytdl.getInfo(videoId, (err, info) => {
     if (err) {
       console.log(err);
       return callback("https://google.com", "error getting info");
@@ -94,7 +112,7 @@ const getVideoInfo = async (videoId) => {
         info: info,
       };
     }
-  });
+  }));
 };
 
 const uploadYoutubeStream = (videoId) => {
@@ -137,6 +155,23 @@ const searchForVideos = async (searchQuery, nextPageToken, amount) => {
         searchQuery
       );
       return results;
+    })
+    .catch((err) => {
+      console.log(err);
+      return err;
+    });
+};
+
+const getPlaylist = async (playlistId, nextPageToken, amount) => {
+  const config = youtubeAPI.buildListPlaylistItemsRequest(
+    playlistId,
+    nextPageToken,
+    amount
+  );
+  return axios
+    .request(config)
+    .then((response) => {
+      return youtubeAPI.reducePlaylist(response.data, playlistId);
     })
     .catch((err) => {
       console.log(err);

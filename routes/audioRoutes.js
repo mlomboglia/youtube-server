@@ -6,6 +6,8 @@ router.get('/search/:query/:nextPageToken?', audioController.searchVideos);
 
 router.get('/play/:videoId', audioController.playVideo);
 
+router.get('/playlist/:playlistId', audioController.listPlaylistItems);
+
 router.get('/', (req, res) => {
     res.status(200).send({ message: 'OK'});
 });
