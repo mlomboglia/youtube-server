@@ -39,11 +39,17 @@ exports.uploadAudioInfo = (videoId, info) => {
 };
 
 exports.getAudio = async (videoId) => {
+  console.log("GetAudio");
   const s3params = {
     Bucket: process.env.AWS_S3_BUCKET,
     Key: videoId + ".mp3",
   };
-
+  
   const headCode = await s3.headObject(s3params).promise();
-  return (signedUrl = s3.getSignedUrl("getObject", s3params));
+  const urlParams = {
+    ...s3params,
+    Expires: 86400
+  };
+
+  return (signedUrl = s3.getSignedUrl("getObject", urlParams));
 };
